@@ -4,7 +4,7 @@ Control a Qingping CGD1 "Dove" Bluetooth alarm clock from your browser. Alarms,
 settings, time sync, live temperature and humidity, and custom ringtones, all
 over Web Bluetooth. No app, no cloud, no account. Not affiliated with Qingping.
 
-**Live version: [dove.rjoc.me](https://dove.rjoc.me)**
+**Live version: [cgd1.rjoc.me](https://cgd1.rjoc.me)**
 
 ## What it does
 
