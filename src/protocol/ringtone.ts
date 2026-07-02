@@ -9,7 +9,7 @@
 
 import { CMD_AUDIO_INIT, CMD_AUDIO_PACKET } from './const';
 
-const PACKET_PAYLOAD_LEN = 128;
+export const PACKET_PAYLOAD_LEN = 128;
 const PACKETS_PER_BLOCK = 4;
 const PADDING_BYTE = 0xff;
 
