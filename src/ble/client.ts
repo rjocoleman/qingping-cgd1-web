@@ -1,0 +1,547 @@
+/** Web Bluetooth client for the CGD1. Mirrors qingping_cgd1/client.py's state machine. */
+
+import { ACK_STATUS_CONTINUE, ACK_STATUS_SUCCESS, parseAck } from '../protocol/ack';
+import {
+  decodeAlarm,
+  decodeSettings,
+  encodeAlarm,
+  encodeSettings,
+  encodeTime,
+  parseConnectedSensor,
+  parseFirmware,
+} from '../protocol/codec';
+import {
+  ALARM_SLOT_COUNT,
+  AUTH_NOTIFY_UUID,
+  AUTH_STEP1,
+  AUTH_STEP2,
+  AUTH_WRITE_UUID,
+  BATTERY_SERVICE_UUID,
+  BATTERY_UUID,
+  CMD_BEEP_PREVIEW,
+  CMD_BEEP_PREVIEW_VOLUME,
+  CMD_BRIGHTNESS,
+  CMD_READ_ALARMS,
+  CMD_READ_FIRMWARE,
+  CMD_READ_SETTINGS,
+  DATA_NOTIFY_UUID,
+  DATA_WRITE_UUID,
+  SENSOR_NOTIFY_UUID,
+  SERVICE_UUID,
+} from '../protocol/const';
+import { PACKET_PAYLOAD_LEN, buildAudioInit, chunkAudio } from '../protocol/ringtone';
+import type { Alarm, DeviceInfo, DeviceSettings, SensorData } from '../protocol/types';
+import { emptyAlarm } from '../protocol/types';
+import {
+  type BleCharacteristic,
+  type BleDeviceHandle,
+  type BleServer,
+  getBluetooth,
+} from './transport';
+import {
+  AuthRejectedError,
+  BleUnsupportedError,
+  CommandError,
+  ConnectionLostError,
+  type ConnectionState,
+  type DeviceRef,
+  type FrameDirection,
+  type QingpingClient,
+} from './types';
+
+const COMMAND_TIMEOUT_MS = 10_000;
+const INIT_ACK_TIMEOUT_MS = 10_000;
+const BLOCK_ACK_TIMEOUT_MS = 5_000;
+const BLOCK_ACK_SUBCMD = 0x08;
+const AUTH_STEP2_SUCCESS = 0x00;
+
+interface PendingFuture<T> {
+  resolve(value: T): void;
+  reject(err: Error): void;
+}
+
+interface ConnectedCharacteristics {
+  authWrite: BleCharacteristic;
+  authNotify: BleCharacteristic;
+  dataWrite: BleCharacteristic;
+  dataNotify: BleCharacteristic;
+  sensorNotify: BleCharacteristic;
+}
+
+function concatBytes(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+function toBytes(view: DataView): Uint8Array {
+  return new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
+}
+
+function hexHeader(payload: Uint8Array): string {
+  return Array.from(payload.slice(0, 2))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join(' ');
+}
+
+class QingpingClientImpl implements QingpingClient {
+  private deviceHandle: BleDeviceHandle | null = null;
+  private deviceRef: DeviceRef | null = null;
+  private server: BleServer | null = null;
+  private chars: ConnectedCharacteristics | null = null;
+
+  private mutex: Promise<void> = Promise.resolve();
+
+  private ackFutures = new Map<number, PendingFuture<number>>();
+  private settingsFuture: PendingFuture<Uint8Array> | null = null;
+  private firmwareFuture: PendingFuture<Uint8Array> | null = null;
+  private alarmFuture: PendingFuture<Alarm[]> | null = null;
+  private alarmSlots: (Alarm | null)[] = new Array(ALARM_SLOT_COUNT).fill(null);
+
+  private stateListeners = new Set<(state: ConnectionState) => void>();
+  private sensorListeners = new Set<(data: SensorData) => void>();
+  private frameListeners = new Set<
+    (dir: FrameDirection, characteristic: string, bytes: Uint8Array) => void
+  >();
+
+  constructor(private readonly deviceOverride?: BleDeviceHandle) {}
+
+  get device(): DeviceRef | null {
+    return this.deviceRef;
+  }
+
+  async requestDevice(): Promise<DeviceRef> {
+    if (this.deviceOverride) {
+      this.deviceHandle = this.deviceOverride;
+    } else {
+      const bluetooth = getBluetooth();
+      if (!bluetooth) throw new BleUnsupportedError('this browser does not support Web Bluetooth');
+      this.deviceHandle = await bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }],
+        optionalServices: [SERVICE_UUID, BATTERY_SERVICE_UUID],
+      });
+    }
+    this.deviceRef = { id: this.deviceHandle.id, name: this.deviceHandle.name ?? null };
+    return this.deviceRef;
+  }
+
+  async connect(token: Uint8Array): Promise<void> {
+    return this.withLock(async () => {
+      const deviceHandle = this.deviceHandle;
+      if (!deviceHandle) throw new Error('call requestDevice() before connect()');
+      this.setState('connecting');
+      try {
+        const server = await deviceHandle.gatt?.connect();
+        if (!server) throw new Error('device has no GATT server');
+        this.server = server;
+
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        const authWrite = await service.getCharacteristic(AUTH_WRITE_UUID);
+        const authNotify = await service.getCharacteristic(AUTH_NOTIFY_UUID);
+        const dataWrite = await service.getCharacteristic(DATA_WRITE_UUID);
+        const dataNotify = await service.getCharacteristic(DATA_NOTIFY_UUID);
+        const sensorNotify = await service.getCharacteristic(SENSOR_NOTIFY_UUID);
+        this.chars = { authWrite, authNotify, dataWrite, dataNotify, sensorNotify };
+
+        await authNotify.startNotifications();
+        authNotify.addEventListener(
+          'characteristicvaluechanged',
+          this.onProtocolNotify('auth-notify', authNotify),
+        );
+        await dataNotify.startNotifications();
+        dataNotify.addEventListener(
+          'characteristicvaluechanged',
+          this.onProtocolNotify('data-notify', dataNotify),
+        );
+        await sensorNotify.startNotifications();
+        sensorNotify.addEventListener(
+          'characteristicvaluechanged',
+          this.onSensorNotify(sensorNotify),
+        );
+
+        deviceHandle.addEventListener('gattserverdisconnected', this.onGattDisconnected);
+
+        this.setState('authenticating');
+        await this.authStep(authWrite, concatBytes(AUTH_STEP1, token), ACK_STATUS_CONTINUE, 1);
+        await this.authStep(authWrite, concatBytes(AUTH_STEP2, token), AUTH_STEP2_SUCCESS, 2);
+
+        this.setState('connected');
+      } catch (err) {
+        this.teardownConnection(err instanceof Error ? err : new Error(String(err)));
+        throw err;
+      }
+    });
+  }
+
+  async disconnect(): Promise<void> {
+    const server = this.server;
+    if (server?.connected) server.disconnect();
+    this.teardownConnection(new ConnectionLostError('disconnected'));
+  }
+
+  onConnectionStateChange(listener: (state: ConnectionState) => void): () => void {
+    this.stateListeners.add(listener);
+    return () => this.stateListeners.delete(listener);
+  }
+
+  onSensorData(listener: (data: SensorData) => void): () => void {
+    this.sensorListeners.add(listener);
+    return () => this.sensorListeners.delete(listener);
+  }
+
+  onFrame(
+    listener: (dir: FrameDirection, characteristic: string, bytes: Uint8Array) => void,
+  ): () => void {
+    this.frameListeners.add(listener);
+    return () => this.frameListeners.delete(listener);
+  }
+
+  async readSettings(): Promise<DeviceSettings> {
+    return this.withLock(async () => decodeSettings(await this.requestSettings()));
+  }
+
+  async writeSettings(settings: DeviceSettings): Promise<void> {
+    return this.withLock(async () => {
+      await this.writeWithAck(this.requireDataWrite(), encodeSettings(settings), 'data-write');
+    });
+  }
+
+  async readAlarms(): Promise<Alarm[]> {
+    return this.withLock(() => this.requestAlarms());
+  }
+
+  async writeAlarm(slot: number, alarm: Alarm): Promise<void> {
+    return this.withLock(async () => {
+      await this.writeWithAck(this.requireDataWrite(), encodeAlarm(slot, alarm), 'data-write');
+    });
+  }
+
+  async deleteAlarm(slot: number): Promise<void> {
+    return this.writeAlarm(slot, emptyAlarm());
+  }
+
+  async syncTime(): Promise<void> {
+    return this.withLock(async () => {
+      const payload = encodeTime(Math.floor(Date.now() / 1000));
+      await this.writeWithAck(this.requireAuthWrite(), payload, 'auth-write');
+    });
+  }
+
+  async setBrightness(level: number): Promise<void> {
+    if (level < 0 || level > 100) throw new Error(`brightness must be 0-100, got ${level}`);
+    return this.withLock(async () => {
+      const payload = Uint8Array.of(...CMD_BRIGHTNESS, Math.round(level / 10));
+      await this.writeWithAck(this.requireDataWrite(), payload, 'data-write');
+    });
+  }
+
+  async previewBeep(volume?: number): Promise<void> {
+    return this.withLock(async () => {
+      const payload =
+        volume === undefined ? CMD_BEEP_PREVIEW : Uint8Array.of(...CMD_BEEP_PREVIEW_VOLUME, volume);
+      await this.writeWithAck(this.requireDataWrite(), payload, 'data-write');
+    });
+  }
+
+  async readFirmware(): Promise<DeviceInfo> {
+    return this.withLock(async () => ({ firmware: parseFirmware(await this.requestFirmware()) }));
+  }
+
+  async readBattery(): Promise<number> {
+    return this.withLock(async () => {
+      const server = this.server;
+      if (!server) throw new ConnectionLostError('not connected');
+      const service = await server.getPrimaryService(BATTERY_SERVICE_UUID);
+      const char = await service.getCharacteristic(BATTERY_UUID);
+      const view = await char.readValue();
+      this.emitFrame('rx', 'battery', toBytes(view));
+      return view.getUint8(0);
+    });
+  }
+
+  async uploadRingtone(
+    pcm: Uint8Array,
+    signature: Uint8Array,
+    onProgress?: (sent: number, total: number) => void,
+  ): Promise<void> {
+    return this.withLock(async () => {
+      const dataWrite = this.requireDataWrite();
+      const total = pcm.length;
+
+      await this.writeWithAck(
+        dataWrite,
+        buildAudioInit(total, signature),
+        'data-write',
+        INIT_ACK_TIMEOUT_MS,
+      );
+
+      const blocks = chunkAudio(pcm);
+      let sent = 0;
+      for (const [index, block] of blocks.entries()) {
+        const blockAck = this.registerAck(BLOCK_ACK_SUBCMD, BLOCK_ACK_TIMEOUT_MS);
+        for (const packet of block) {
+          await this.writeRaw(dataWrite, packet, 'data-write');
+          sent = Math.min(sent + PACKET_PAYLOAD_LEN, total);
+        }
+        let status: number;
+        try {
+          status = await blockAck;
+        } catch (err) {
+          throw err instanceof CommandError
+            ? new CommandError(`ringtone block ${index} failed: ${err.message}`)
+            : err;
+        }
+        if (!ACK_STATUS_SUCCESS.has(status)) {
+          throw new CommandError(
+            `ringtone block ${index} failed with status 0x${status.toString(16)}`,
+          );
+        }
+        onProgress?.(sent, total);
+      }
+    });
+  }
+
+  // -- connection lifecycle -------------------------------------------------
+
+  private setState(state: ConnectionState): void {
+    for (const listener of this.stateListeners) listener(state);
+  }
+
+  private onGattDisconnected = (): void => {
+    this.teardownConnection(new ConnectionLostError('the device disconnected'));
+  };
+
+  private teardownConnection(err: Error): void {
+    for (const fut of this.ackFutures.values()) fut.reject(err);
+    this.ackFutures.clear();
+    this.settingsFuture?.reject(err);
+    this.settingsFuture = null;
+    this.firmwareFuture?.reject(err);
+    this.firmwareFuture = null;
+    this.alarmFuture?.reject(err);
+    this.alarmFuture = null;
+    this.server = null;
+    this.chars = null;
+    this.setState('disconnected');
+  }
+
+  private async withLock<T>(fn: () => Promise<T>): Promise<T> {
+    const run = this.mutex.then(fn, fn);
+    this.mutex = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private requireDataWrite(): BleCharacteristic {
+    if (!this.chars) throw new ConnectionLostError('not connected');
+    return this.chars.dataWrite;
+  }
+
+  private requireAuthWrite(): BleCharacteristic {
+    if (!this.chars) throw new ConnectionLostError('not connected');
+    return this.chars.authWrite;
+  }
+
+  // -- writes and ACKs -------------------------------------------------------
+
+  private async writeRaw(
+    char: BleCharacteristic,
+    payload: Uint8Array,
+    frameName: string,
+  ): Promise<void> {
+    this.emitFrame('tx', frameName, payload);
+    await char.writeValueWithResponse(payload);
+  }
+
+  private registerAck(subcmd: number, timeoutMs: number): Promise<number> {
+    return new Promise<number>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.ackFutures.delete(subcmd);
+        reject(new CommandError(`timed out waiting for ack 0x${subcmd.toString(16)}`));
+      }, timeoutMs);
+      this.ackFutures.set(subcmd, {
+        resolve: (status) => {
+          clearTimeout(timer);
+          this.ackFutures.delete(subcmd);
+          resolve(status);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          this.ackFutures.delete(subcmd);
+          reject(err);
+        },
+      });
+    });
+  }
+
+  private resolveAck(subcmd: number, status: number): void {
+    this.ackFutures.get(subcmd)?.resolve(status);
+  }
+
+  private async writeWithAck(
+    char: BleCharacteristic,
+    payload: Uint8Array,
+    frameName: string,
+    timeoutMs = COMMAND_TIMEOUT_MS,
+  ): Promise<void> {
+    const subcmd = payload[1] ?? 0;
+    const ack = this.registerAck(subcmd, timeoutMs);
+    await this.writeRaw(char, payload, frameName);
+    const status = await ack;
+    if (!ACK_STATUS_SUCCESS.has(status)) {
+      throw new CommandError(
+        `command ${hexHeader(payload)} failed with status 0x${status.toString(16)}`,
+      );
+    }
+  }
+
+  private async authStep(
+    char: BleCharacteristic,
+    payload: Uint8Array,
+    expectedStatus: number,
+    step: 1 | 2,
+  ): Promise<void> {
+    const subcmd = payload[1] as number;
+    const ack = this.registerAck(subcmd, COMMAND_TIMEOUT_MS);
+    await this.writeRaw(char, payload, 'auth-write');
+    const status = await ack;
+    if (status === expectedStatus) return;
+    if (status === 0x01) throw new AuthRejectedError('the clock is bound to a different token');
+    throw new CommandError(`auth step ${step} failed with status 0x${status.toString(16)}`);
+  }
+
+  // -- notify-backed reads ---------------------------------------------------
+
+  private requestNotifyResponse<T>(
+    write: () => Promise<void>,
+    setFuture: (future: PendingFuture<T> | null) => void,
+    timeoutMessage: string,
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => {
+        setFuture(null);
+        reject(new CommandError(timeoutMessage));
+      }, COMMAND_TIMEOUT_MS);
+      setFuture({
+        resolve: (value) => {
+          clearTimeout(timer);
+          setFuture(null);
+          resolve(value);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          setFuture(null);
+          reject(err);
+        },
+      });
+      write().catch((err) => {
+        clearTimeout(timer);
+        setFuture(null);
+        reject(err instanceof Error ? err : new Error(String(err)));
+      });
+    });
+  }
+
+  private requestSettings(): Promise<Uint8Array> {
+    return this.requestNotifyResponse<Uint8Array>(
+      () => this.writeRaw(this.requireDataWrite(), CMD_READ_SETTINGS, 'data-write'),
+      (f) => {
+        this.settingsFuture = f;
+      },
+      'timed out waiting for settings',
+    );
+  }
+
+  private requestFirmware(): Promise<Uint8Array> {
+    return this.requestNotifyResponse<Uint8Array>(
+      () => this.writeRaw(this.requireAuthWrite(), CMD_READ_FIRMWARE, 'auth-write'),
+      (f) => {
+        this.firmwareFuture = f;
+      },
+      'timed out waiting for firmware',
+    );
+  }
+
+  private requestAlarms(): Promise<Alarm[]> {
+    this.alarmSlots = new Array(ALARM_SLOT_COUNT).fill(null);
+    return this.requestNotifyResponse<Alarm[]>(
+      () => this.writeRaw(this.requireDataWrite(), CMD_READ_ALARMS, 'data-write'),
+      (f) => {
+        this.alarmFuture = f;
+      },
+      'timed out waiting for alarms',
+    );
+  }
+
+  // -- notification dispatch --------------------------------------------------
+
+  private onProtocolNotify(frameName: string, char: BleCharacteristic): () => void {
+    return () => {
+      const view = char.value;
+      if (!view) return;
+      const bytes = toBytes(view);
+      this.emitFrame('rx', frameName, bytes);
+      this.dispatchProtocolFrame(bytes);
+    };
+  }
+
+  private dispatchProtocolFrame(bytes: Uint8Array): void {
+    const ack = parseAck(bytes);
+    if (ack) {
+      this.resolveAck(ack.subcmd, ack.status);
+      return;
+    }
+    if (bytes[0] === 0x13) {
+      this.settingsFuture?.resolve(bytes);
+      return;
+    }
+    if (bytes[0] === 0x11 && bytes[1] === 0x06) {
+      this.handleAlarmFrame(bytes);
+      return;
+    }
+    if (bytes[0] === 0x0b) {
+      this.firmwareFuture?.resolve(bytes);
+    }
+  }
+
+  private handleAlarmFrame(bytes: Uint8Array): void {
+    const base = bytes[2] as number;
+    const body = bytes.slice(3);
+    for (let offset = 0; offset + 5 <= body.length; offset += 5) {
+      const slot = base + offset / 5;
+      if (slot >= 0 && slot < ALARM_SLOT_COUNT) {
+        this.alarmSlots[slot] = decodeAlarm(body.slice(offset, offset + 5));
+      }
+    }
+    if (this.alarmFuture && this.alarmSlots.every((slot) => slot !== null)) {
+      this.alarmFuture.resolve(this.alarmSlots as Alarm[]);
+    }
+  }
+
+  private onSensorNotify(char: BleCharacteristic): () => void {
+    return () => {
+      const view = char.value;
+      if (!view) return;
+      const bytes = toBytes(view);
+      this.emitFrame('rx', 'sensor-notify', bytes);
+      const data = parseConnectedSensor(bytes);
+      for (const listener of this.sensorListeners) listener(data);
+    };
+  }
+
+  private emitFrame(dir: FrameDirection, characteristic: string, bytes: Uint8Array): void {
+    for (const listener of this.frameListeners) listener(dir, characteristic, bytes);
+  }
+}
+
+export function createQingpingClient(): QingpingClient {
+  return new QingpingClientImpl();
+}
+
+/** Test-only escape hatch: inject a fake device so the real GATT flow can be exercised. */
+export function createQingpingClientWithDevice(device: BleDeviceHandle): QingpingClient {
+  return new QingpingClientImpl(device);
+}
