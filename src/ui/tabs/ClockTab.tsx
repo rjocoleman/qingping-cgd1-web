@@ -79,7 +79,7 @@ export function ClockTab() {
           <span className="caption">{upcoming ? formatWhen(upcoming) : 'No alarms set'}</span>
         </div>
         <div className="row">
-          <span className="row__label">Time on the clock</span>
+          <span className="row__label">Time here (what sync sets)</span>
           <span className="caption mono">{clockTick.toLocaleTimeString()}</span>
         </div>
       </div>

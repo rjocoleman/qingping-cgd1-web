@@ -92,6 +92,7 @@ class QingpingClientImpl implements QingpingClient {
   private chars: ConnectedCharacteristics | null = null;
 
   private mutex: Promise<void> = Promise.resolve();
+  private listenerCleanups: Array<() => void> = [];
 
   private ackFutures = new Map<number, PendingFuture<number>>();
   private settingsFuture: PendingFuture<Uint8Array> | null = null;
@@ -145,22 +146,16 @@ class QingpingClientImpl implements QingpingClient {
         this.chars = { authWrite, authNotify, dataWrite, dataNotify, sensorNotify };
 
         await authNotify.startNotifications();
-        authNotify.addEventListener(
-          'characteristicvaluechanged',
-          this.onProtocolNotify('auth-notify', authNotify),
-        );
+        this.addTrackedListener(authNotify, this.onProtocolNotify('auth-notify', authNotify));
         await dataNotify.startNotifications();
-        dataNotify.addEventListener(
-          'characteristicvaluechanged',
-          this.onProtocolNotify('data-notify', dataNotify),
-        );
+        this.addTrackedListener(dataNotify, this.onProtocolNotify('data-notify', dataNotify));
         await sensorNotify.startNotifications();
-        sensorNotify.addEventListener(
-          'characteristicvaluechanged',
-          this.onSensorNotify(sensorNotify),
-        );
+        this.addTrackedListener(sensorNotify, this.onSensorNotify(sensorNotify));
 
         deviceHandle.addEventListener('gattserverdisconnected', this.onGattDisconnected);
+        this.listenerCleanups.push(() =>
+          deviceHandle.removeEventListener('gattserverdisconnected', this.onGattDisconnected),
+        );
 
         this.setState('authenticating');
         await this.authStep(authWrite, concatBytes(AUTH_STEP1, token), ACK_STATUS_CONTINUE, 1);
@@ -231,7 +226,7 @@ class QingpingClientImpl implements QingpingClient {
   async setBrightness(level: number): Promise<void> {
     if (level < 0 || level > 100) throw new Error(`brightness must be 0-100, got ${level}`);
     return this.withLock(async () => {
-      const payload = Uint8Array.of(...CMD_BRIGHTNESS, Math.round(level / 10));
+      const payload = Uint8Array.of(...CMD_BRIGHTNESS, Math.floor(level / 10));
       await this.writeWithAck(this.requireDataWrite(), payload, 'data-write');
     });
   }
@@ -312,7 +307,20 @@ class QingpingClientImpl implements QingpingClient {
     this.teardownConnection(new ConnectionLostError('the device disconnected'));
   };
 
+  // Listeners are added per-connection but the device handle outlives them,
+  // so each one is tracked and removed on teardown. Without this, every
+  // reconnect stacks another handler and one physical disconnect fans out
+  // into several 'disconnected' events.
+  private addTrackedListener(char: BleCharacteristic, handler: () => void): void {
+    char.addEventListener('characteristicvaluechanged', handler);
+    this.listenerCleanups.push(() =>
+      char.removeEventListener('characteristicvaluechanged', handler),
+    );
+  }
+
   private teardownConnection(err: Error): void {
+    for (const cleanup of this.listenerCleanups) cleanup();
+    this.listenerCleanups = [];
     for (const fut of this.ackFutures.values()) fut.reject(err);
     this.ackFutures.clear();
     this.settingsFuture?.reject(err);
@@ -527,6 +535,9 @@ class QingpingClientImpl implements QingpingClient {
       if (!view) return;
       const bytes = toBytes(view);
       this.emitFrame('rx', 'sensor-notify', bytes);
+      // Skip frames the parser would reject; a throw here would escape into
+      // the DOM event loop as an uncaught error.
+      if (bytes[0] !== 0x00 || bytes.length < 5) return;
       const data = parseConnectedSensor(bytes);
       for (const listener of this.sensorListeners) listener(data);
     };

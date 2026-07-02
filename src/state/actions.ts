@@ -1,11 +1,5 @@
 /** Actions that wrap the client and keep the signals store in sync. */
 
-import { CUSTOM_SLOT_A, CUSTOM_SLOT_B } from '../protocol/ringtone';
-import type { Alarm, DeviceSettings } from '../protocol/types';
-import { emptyAlarm, isAlarmEmpty } from '../protocol/types';
-import { getClient } from './client';
-import { fromHex, isValidTokenHex, toHex } from './hex';
-import { getAutoSyncTime } from './prefs';
 import {
   AuthRejectedError,
   BleUnsupportedError,
@@ -14,6 +8,12 @@ import {
   type DeviceRef,
   type QingpingClient,
 } from '../ble/types';
+import { CUSTOM_SLOT_A, CUSTOM_SLOT_B } from '../protocol/ringtone';
+import type { Alarm, DeviceSettings } from '../protocol/types';
+import { emptyAlarm, isAlarmEmpty } from '../protocol/types';
+import { getClient } from './client';
+import { fromHex, isValidTokenHex, toHex } from './hex';
+import { getAutoSyncTime, getStoredNightWindow, setStoredNightWindow } from './prefs';
 import {
   type ErrorBannerState,
   alarms,
@@ -237,23 +237,75 @@ export async function previewBrightness(level: number): Promise<void> {
   }
 }
 
-export async function saveSettings(patch: Partial<DeviceSettings>): Promise<void> {
-  const current = settings.value;
-  if (!current) return;
-  const merged: DeviceSettings = {
-    ...current,
-    ...patch,
-    rawReserved: current.rawReserved,
-  };
-  setBusy('settings', true);
-  try {
-    await getClient().writeSettings(merged);
-    settings.value = merged;
-  } catch (err) {
-    errorBanner.value = describeError(err, () => saveSettings(patch));
-  } finally {
-    setBusy('settings', false);
+// Settings writes are serialised through a queue, and each patch is merged
+// onto settings.value at execution time, not call time. Without this, two
+// quick edits (a slider drag, then a toggle) both merge from the same stale
+// snapshot and the second full-blob write reverts the first on the device.
+// It also keeps two writes with the same ACK sub-command from being in
+// flight at once.
+let settingsWriteQueue: Promise<void> = Promise.resolve();
+
+export function saveSettings(patch: Partial<DeviceSettings>): Promise<void> {
+  const run = settingsWriteQueue.then(async () => {
+    const current = settings.value;
+    if (!current) return;
+    const merged: DeviceSettings = {
+      ...current,
+      ...patch,
+      rawReserved: current.rawReserved,
+    };
+    setBusy('settings', true);
+    try {
+      await getClient().writeSettings(merged);
+      settings.value = merged;
+    } catch (err) {
+      errorBanner.value = describeError(err, () => saveSettings(patch));
+    } finally {
+      setBusy('settings', false);
+    }
+  });
+  settingsWriteQueue = run;
+  return run;
+}
+
+// The firmware has no real night-mode off switch, so "off" is a 1-minute
+// window (00:00-00:01), the same trick the official app uses. The user's
+// real window is stashed locally so toggling back on restores it.
+const NIGHT_OFF_START = { hour: 0, minute: 0 };
+const NIGHT_OFF_END = { hour: 0, minute: 1 };
+const NIGHT_DEFAULT_WINDOW = {
+  start: { hour: 22, minute: 0 },
+  end: { hour: 7, minute: 0 },
+};
+
+export function isNightModeOff(s: DeviceSettings): boolean {
+  if (!s.nightMode) return true;
+  return (
+    s.nightStart.hour === NIGHT_OFF_START.hour &&
+    s.nightStart.minute === NIGHT_OFF_START.minute &&
+    s.nightEnd.hour === NIGHT_OFF_END.hour &&
+    s.nightEnd.minute === NIGHT_OFF_END.minute
+  );
+}
+
+export function setNightMode(enabled: boolean): Promise<void> {
+  if (!enabled) {
+    const current = settings.value;
+    if (current && !isNightModeOff(current)) {
+      setStoredNightWindow({ start: current.nightStart, end: current.nightEnd });
+    }
+    return saveSettings({ nightMode: false, nightStart: NIGHT_OFF_START, nightEnd: NIGHT_OFF_END });
   }
+  const window = getStoredNightWindow() ?? NIGHT_DEFAULT_WINDOW;
+  return saveSettings({ nightMode: true, nightStart: window.start, nightEnd: window.end });
+}
+
+export function setNightWindow(
+  start: { hour: number; minute: number },
+  end: { hour: number; minute: number },
+): Promise<void> {
+  setStoredNightWindow({ start, end });
+  return saveSettings({ nightStart: start, nightEnd: end });
 }
 
 export function firstEmptyAlarmSlot(): number | null {
@@ -328,6 +380,9 @@ export async function adoptTokenHex(hex: string): Promise<void> {
   if (!token) throw new Error('enter the 32-character hex token (16 bytes)');
   setBusy('adopt-token', true);
   try {
+    // Drop any existing session first; connect() layers a fresh set of
+    // notification subscriptions and must not stack on a live one.
+    await getClient().disconnect();
     await getClient().connect(token);
     tokenStore.setToken(dev.id, toHex(token), dev.name);
     if (getAutoSyncTime()) {

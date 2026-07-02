@@ -1,5 +1,12 @@
 import type { Language } from '../../protocol/types';
-import { previewBeep, previewBrightness, saveSettings } from '../../state/actions';
+import {
+  isNightModeOff,
+  previewBeep,
+  previewBrightness,
+  saveSettings,
+  setNightMode,
+  setNightWindow,
+} from '../../state/actions';
 import { connectionState, settings } from '../../state/store';
 import { Switch } from '../components/Switch';
 
@@ -130,7 +137,7 @@ export function SettingsTab() {
               className="btn btn--small"
               onClick={() => void saveSettings({ tzOffsetMinutes: current.tzOffsetMinutes - 6 })}
             >
-              −
+              -
             </button>
             <span className="caption mono">{formatOffset(current.tzOffsetMinutes)}</span>
             <button
@@ -156,33 +163,41 @@ export function SettingsTab() {
         <div className="row">
           <span className="row__label">Night mode</span>
           <Switch
-            checked={current.nightMode}
+            checked={!isNightModeOff(current)}
             label="Night mode"
-            onChange={(checked) => void saveSettings({ nightMode: checked })}
+            onChange={(checked) => void setNightMode(checked)}
           />
         </div>
-        <div className="row">
-          <span className="row__label">Starts</span>
-          <input
-            type="time"
-            value={`${pad2(current.nightStart.hour)}:${pad2(current.nightStart.minute)}`}
-            onChange={(e) => {
-              const [hour, minute] = (e.target as HTMLInputElement).value.split(':').map(Number);
-              void saveSettings({ nightStart: { hour: hour ?? 0, minute: minute ?? 0 } });
-            }}
-          />
-        </div>
-        <div className="row">
-          <span className="row__label">Ends</span>
-          <input
-            type="time"
-            value={`${pad2(current.nightEnd.hour)}:${pad2(current.nightEnd.minute)}`}
-            onChange={(e) => {
-              const [hour, minute] = (e.target as HTMLInputElement).value.split(':').map(Number);
-              void saveSettings({ nightEnd: { hour: hour ?? 0, minute: minute ?? 0 } });
-            }}
-          />
-        </div>
+        {!isNightModeOff(current) && (
+          <>
+            <div className="row">
+              <span className="row__label">Starts</span>
+              <input
+                type="time"
+                value={`${pad2(current.nightStart.hour)}:${pad2(current.nightStart.minute)}`}
+                onChange={(e) => {
+                  const [hour, minute] = (e.target as HTMLInputElement).value
+                    .split(':')
+                    .map(Number);
+                  void setNightWindow({ hour: hour ?? 0, minute: minute ?? 0 }, current.nightEnd);
+                }}
+              />
+            </div>
+            <div className="row">
+              <span className="row__label">Ends</span>
+              <input
+                type="time"
+                value={`${pad2(current.nightEnd.hour)}:${pad2(current.nightEnd.minute)}`}
+                onChange={(e) => {
+                  const [hour, minute] = (e.target as HTMLInputElement).value
+                    .split(':')
+                    .map(Number);
+                  void setNightWindow(current.nightStart, { hour: hour ?? 0, minute: minute ?? 0 });
+                }}
+              />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

@@ -1,10 +1,10 @@
 /** Central signals store: connection state, device data, and UI-only flags. */
 
 import { signal } from '@preact/signals';
+import type { ConnectionState, DeviceRef, FrameDirection } from '../ble/types';
 import { ALARM_SLOT_COUNT } from '../protocol/const';
 import type { Alarm, DeviceSettings, SensorData } from '../protocol/types';
 import { emptyAlarm } from '../protocol/types';
-import type { ConnectionState, DeviceRef, FrameDirection } from '../ble/types';
 
 export type ErrorKind = 'auth' | 'command' | 'lost' | 'generic';
 

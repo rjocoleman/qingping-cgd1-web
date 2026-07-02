@@ -24,3 +24,24 @@ export function isBluetoothSupported(): boolean {
   if (isDemoMode()) return true;
   return typeof navigator !== 'undefined' && 'bluetooth' in navigator;
 }
+
+const NIGHT_WINDOW_KEY = 'qingping.nightWindow.v1';
+
+export interface NightWindow {
+  start: { hour: number; minute: number };
+  end: { hour: number; minute: number };
+}
+
+export function getStoredNightWindow(): NightWindow | null {
+  const raw = storage()?.getItem(NIGHT_WINDOW_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as NightWindow;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredNightWindow(window: NightWindow): void {
+  storage()?.setItem(NIGHT_WINDOW_KEY, JSON.stringify(window));
+}

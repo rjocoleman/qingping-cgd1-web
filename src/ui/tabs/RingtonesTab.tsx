@@ -1,7 +1,7 @@
 import { useState } from 'preact/hooks';
+import { MAX_RINGTONE_SECONDS, convertToDevicePcm, playPcmPreview } from '../../audio/convert';
 import { CUSTOM_SLOT_A, CUSTOM_SLOT_B, OFFICIAL_RINGTONES } from '../../protocol/ringtone';
 import { activateRingtone, uploadCustomRingtone } from '../../state/actions';
-import { MAX_RINGTONE_SECONDS, convertToDevicePcm, playPcmPreview } from '../../audio/convert';
 import { connectionState, isBusy, settings } from '../../state/store';
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

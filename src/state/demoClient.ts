@@ -5,6 +5,8 @@
  * protocol codec so the Advanced tab's log reads like a real capture.
  */
 
+import type { ConnectionState, DeviceRef, FrameDirection, QingpingClient } from '../ble/types';
+import { AuthRejectedError, CommandError } from '../ble/types';
 import { encodeAlarm, encodeSettings, encodeTime } from '../protocol/codec';
 import {
   ACK_HEADER,
@@ -27,8 +29,6 @@ import { chunkAudio } from '../protocol/ringtone';
 import type { Alarm, DeviceSettings, SensorData } from '../protocol/types';
 import { Weekday, emptyAlarm } from '../protocol/types';
 import { fromHex, toHex } from './hex';
-import type { ConnectionState, DeviceRef, FrameDirection, QingpingClient } from '../ble/types';
-import { AuthRejectedError, CommandError } from '../ble/types';
 
 const DEMO_DEVICE: DeviceRef = { id: 'demo-device-1', name: 'Qingping CGD1' };
 const DEMO_FIRMWARE = '1.4.2';
