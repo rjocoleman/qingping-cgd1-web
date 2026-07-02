@@ -1,13 +1,21 @@
 import { useState } from 'preact/hooks';
-import { OFFICIAL_RINGTONES } from '../../protocol/ringtone';
+import { CUSTOM_SLOT_A, CUSTOM_SLOT_B, OFFICIAL_RINGTONES } from '../../protocol/ringtone';
 import { activateRingtone, uploadCustomRingtone } from '../../state/actions';
 import { MAX_RINGTONE_SECONDS, convertToDevicePcm, playPcmPreview } from '../../audio/convert';
-import { toHex } from '../../state/hex';
 import { connectionState, isBusy, settings } from '../../state/store';
 
 function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   return a.every((byte, i) => byte === b[i]);
+}
+
+function activeRingtoneName(signature: Uint8Array): string {
+  const official = Object.entries(OFFICIAL_RINGTONES).find(([, sig]) => bytesEqual(sig, signature));
+  if (official) return official[0];
+  if (bytesEqual(signature, CUSTOM_SLOT_A) || bytesEqual(signature, CUSTOM_SLOT_B)) {
+    return 'Custom ringtone';
+  }
+  return 'Unknown';
 }
 
 export function RingtonesTab() {
@@ -159,9 +167,7 @@ export function RingtonesTab() {
         )}
       </div>
 
-      <p className="caption mono">
-        Active signature: {toHex(current.ringtoneSignature).toUpperCase()}
-      </p>
+      <p className="caption">Active ringtone: {activeRingtoneName(current.ringtoneSignature)}</p>
     </div>
   );
 }

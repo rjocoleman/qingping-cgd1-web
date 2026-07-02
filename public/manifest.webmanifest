@@ -1,0 +1,10 @@
+{
+  "name": "Qingping CGD1",
+  "short_name": "CGD1",
+  "description": "Control a Qingping CGD1 alarm clock over Web Bluetooth",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a1813",
+  "theme_color": "#1a1813",
+  "icons": [{ "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

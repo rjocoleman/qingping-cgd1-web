@@ -65,11 +65,11 @@ export function ClockTab() {
         </div>
         <div className="row">
           <span className="row__label">Battery</span>
-          <span className="caption">{battery.value === null ? '—' : `${battery.value}%`}</span>
+          <span className="caption">{battery.value === null ? '--' : `${battery.value}%`}</span>
         </div>
         <div className="row">
           <span className="row__label">Firmware</span>
-          <span className="caption">{firmware.value ?? '—'}</span>
+          <span className="caption">{firmware.value ?? '--'}</span>
         </div>
       </div>
 
