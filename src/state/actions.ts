@@ -111,13 +111,13 @@ async function finishConnect(
   await refreshAll(client);
 }
 
-export async function connectFlow(): Promise<void> {
+export async function connectFlow(opts?: { allDevices?: boolean }): Promise<void> {
   initClientListeners();
   errorBanner.value = null;
   const client = getClient();
   setBusy('connect', true);
   try {
-    const dev = await client.requestDevice();
+    const dev = await client.requestDevice(opts);
     device.value = dev;
     const storedHex = tokenStore.getToken(dev.id);
     const storedToken = storedHex ? fromHex(storedHex) : null;

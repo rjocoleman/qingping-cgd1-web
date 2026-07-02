@@ -36,11 +36,14 @@ export interface BleDeviceHandle {
 }
 
 interface RequestDeviceFilter {
-  services: string[];
+  services?: string[];
+  namePrefix?: string;
+  serviceData?: Array<{ service: string }>;
 }
 
 interface RequestDeviceOptions {
-  filters: RequestDeviceFilter[];
+  filters?: RequestDeviceFilter[];
+  acceptAllDevices?: boolean;
   optionalServices?: string[];
 }
 

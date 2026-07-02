@@ -130,7 +130,7 @@ class DemoClient implements QingpingClient {
     return Uint8Array.of(ACK_HEADER[0] as number, ACK_HEADER[1] as number, subcmd, 0x01, status);
   }
 
-  async requestDevice(): Promise<DeviceRef> {
+  async requestDevice(_opts?: { allDevices?: boolean }): Promise<DeviceRef> {
     await delay(SHORT_DELAY_MS);
     this.deviceRef = DEMO_DEVICE;
     return DEMO_DEVICE;

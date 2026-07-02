@@ -22,6 +22,10 @@ export const BATTERY_UUID = uuid16(0x2a19);
 export const BATTERY_SERVICE_UUID = uuid16(0x180f);
 
 export const SERVICE_UUID = '22210000-554a-4546-5542-46534450464d';
+// Advertised service-data UUID (Qingping/ClearGrass). Not a connectable GATT
+// service, but it is what the clock's advertisements reliably carry, so the
+// device chooser filters on it.
+export const ADVERT_SERVICE_DATA_UUID = uuid16(0xfdcd);
 
 export const AUTH_STEP1 = Uint8Array.of(0x11, 0x01);
 export const AUTH_STEP2 = Uint8Array.of(0x11, 0x02);

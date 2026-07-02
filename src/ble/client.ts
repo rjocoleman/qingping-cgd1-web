@@ -11,6 +11,7 @@ import {
   parseFirmware,
 } from '../protocol/codec';
 import {
+  ADVERT_SERVICE_DATA_UUID,
   ALARM_SLOT_COUNT,
   AUTH_NOTIFY_UUID,
   AUTH_STEP1,
@@ -112,16 +113,41 @@ class QingpingClientImpl implements QingpingClient {
     return this.deviceRef;
   }
 
-  async requestDevice(): Promise<DeviceRef> {
+  async requestDevice(opts?: { allDevices?: boolean }): Promise<DeviceRef> {
     if (this.deviceOverride) {
       this.deviceHandle = this.deviceOverride;
     } else {
       const bluetooth = getBluetooth();
       if (!bluetooth) throw new BleUnsupportedError('this browser does not support Web Bluetooth');
-      this.deviceHandle = await bluetooth.requestDevice({
-        filters: [{ services: [SERVICE_UUID] }],
-        optionalServices: [SERVICE_UUID, BATTERY_SERVICE_UUID],
-      });
+      const optionalServices = [SERVICE_UUID, BATTERY_SERVICE_UUID];
+      if (opts?.allDevices) {
+        this.deviceHandle = await bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices,
+        });
+      } else {
+        // The chooser only lists devices whose ADVERTISEMENT matches a
+        // filter, and the CGD1 does not reliably advertise its vendor
+        // service UUID - it mainly broadcasts fdcd service data (the HA
+        // integration needs both matchers for the same reason). Filters OR
+        // together, so cast the net wide.
+        const filters = [
+          { services: [SERVICE_UUID] },
+          { serviceData: [{ service: ADVERT_SERVICE_DATA_UUID }] },
+          { namePrefix: 'Qingping' },
+        ];
+        try {
+          this.deviceHandle = await bluetooth.requestDevice({ filters, optionalServices });
+        } catch (err) {
+          // Older Chrome rejects the serviceData filter outright; retry
+          // without it rather than failing the whole chooser.
+          if (!(err instanceof TypeError)) throw err;
+          this.deviceHandle = await bluetooth.requestDevice({
+            filters: filters.filter((f) => !('serviceData' in f)),
+            optionalServices,
+          });
+        }
+      }
     }
     this.deviceRef = { id: this.deviceHandle.id, name: this.deviceHandle.name ?? null };
     return this.deviceRef;

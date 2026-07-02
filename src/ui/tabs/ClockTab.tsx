@@ -59,6 +59,19 @@ export function ClockTab() {
             )}
           </div>
         </div>
+        {!isConnected && (
+          <div className="row">
+            <span className="caption">Clock not listed in the picker?</span>
+            <button
+              type="button"
+              className="btn btn--small"
+              onClick={() => void connectFlow({ allDevices: true })}
+              disabled={isBusy('connect')}
+            >
+              Show all nearby devices
+            </button>
+          </div>
+        )}
         <div className="row">
           <span className="row__label">Device</span>
           <span className="caption">{dev?.name ?? 'No clock connected'}</span>

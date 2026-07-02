@@ -28,7 +28,9 @@ export class CommandError extends Error {}
 export class ConnectionLostError extends Error {}
 
 export interface QingpingClient {
-  requestDevice(): Promise<DeviceRef>;
+  // allDevices lifts the advertisement filters for clocks whose adverts
+  // match none of them; the chooser then lists everything in range.
+  requestDevice(opts?: { allDevices?: boolean }): Promise<DeviceRef>;
   connect(token: Uint8Array): Promise<void>;
   disconnect(): Promise<void>;
 
