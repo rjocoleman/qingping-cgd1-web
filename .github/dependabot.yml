@@ -1,0 +1,30 @@
+version: 2
+updates:
+  # npm toolchain and runtime deps. Cooldowns delay picking up brand-new
+  # releases, so a compromised version has time to be caught and yanked
+  # before it lands in a PR here. Security updates bypass the cooldown, so
+  # real advisories still come through straight away.
+  - package-ecosystem: npm
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+      semver-major-days: 30
+      semver-minor-days: 14
+      semver-patch-days: 7
+    open-pull-requests-limit: 10
+    groups:
+      npm:
+        patterns: ["*"]
+
+  # Actions are SHA-pinned, so these PRs bump the pin plus its version comment.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
