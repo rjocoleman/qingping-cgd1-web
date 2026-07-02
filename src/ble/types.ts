@@ -1,19 +1,44 @@
 /**
  * The async surface the UI consumes. This is a contract only - the Web
- * Bluetooth implementation lands separately once the GATT service UUIDs are
- * confirmed.
+ * Bluetooth implementation lives in client.ts.
  */
 
 import type { Alarm, DeviceInfo, DeviceSettings, SensorData } from '../protocol/types';
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'authenticating' | 'connected';
 
+export type FrameDirection = 'tx' | 'rx';
+
+/** A chosen device. `id` is the opaque per-origin id; there is no MAC over Web Bluetooth. */
+export interface DeviceRef {
+  id: string;
+  name: string | null;
+}
+
+/** navigator.bluetooth is missing - unsupported browser. */
+export class BleUnsupportedError extends Error {}
+
+/** Auth step 2 came back status 0x01 - the clock is bound to another token. */
+export class AuthRejectedError extends Error {}
+
+/** A write got a non-success ACK, or no ACK arrived before the timeout. */
+export class CommandError extends Error {}
+
+/** gattserverdisconnected fired while a command was pending. */
+export class ConnectionLostError extends Error {}
+
 export interface QingpingClient {
-  connect(): Promise<void>;
+  requestDevice(): Promise<DeviceRef>;
+  connect(token: Uint8Array): Promise<void>;
   disconnect(): Promise<void>;
+
+  readonly device: DeviceRef | null;
 
   onConnectionStateChange(listener: (state: ConnectionState) => void): () => void;
   onSensorData(listener: (data: SensorData) => void): () => void;
+  onFrame(
+    listener: (dir: FrameDirection, characteristic: string, bytes: Uint8Array) => void,
+  ): () => void;
 
   readSettings(): Promise<DeviceSettings>;
   writeSettings(settings: DeviceSettings): Promise<void>;
