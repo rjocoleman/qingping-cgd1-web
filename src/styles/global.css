@@ -29,7 +29,11 @@
   --error: #c4442a;
 
   --panel: #14120e;
-  --panel-ghost: #3a352b;
+  /* Unlit segments sit just above the panel, like a real LCD at rest; any
+     brighter and they compete with the lit digits. Dim text on the panel
+     gets its own tone because it still has to be readable. */
+  --panel-ghost: #241f18;
+  --panel-dim: #7d7666;
   --panel-lit: #ffb454;
 
   --font-ui: "IBM Plex Sans", system-ui, sans-serif;
@@ -150,7 +154,7 @@ a {
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  color: var(--panel-ghost);
+  color: var(--panel-dim);
 }
 
 .lcd-panel--connected .lcd-panel__status {
@@ -227,7 +231,7 @@ a {
   margin-top: 10px;
   font-family: var(--font-mono);
   font-size: 15px;
-  color: var(--panel-ghost);
+  color: var(--panel-dim);
 }
 
 .lcd-panel--connected .lcd-panel__minors {
