@@ -4,7 +4,7 @@ import type { Alarm } from '../protocol/types';
 import { emptyAlarm } from '../protocol/types';
 import { createQingpingClientWithDevice } from './client';
 import type { BleCharacteristic, BleDeviceHandle, BleServer, BleService } from './transport';
-import { AuthRejectedError, CommandError, ConnectionLostError } from './types';
+import { AuthRejectedError, ConnectionLostError } from './types';
 
 const TOKEN = new Uint8Array(16).fill(0x42);
 
@@ -118,6 +118,28 @@ function ackFrame(subcmd: number, status: number): Uint8Array {
   return Uint8Array.of(0x04, 0xff, subcmd, 0x00, status);
 }
 
+// A minimal valid 20-byte settings blob (header 0x13 0x01). connect() reads
+// settings to prove the pairing, so the fake device must answer it.
+function settingsFrame(): Uint8Array {
+  const blob = new Uint8Array(20);
+  blob[0] = 0x13;
+  blob[1] = 0x01;
+  blob[2] = 3;
+  blob[3] = 0x58;
+  blob[4] = 0x02;
+  blob[13] = 1;
+  return blob;
+}
+
+/** Wire the data-write characteristic to answer the auth settings-read proof. */
+function answerSettingsProof(service: FakeService): void {
+  const dataWrite = service.char(DATA_WRITE_UUID);
+  const dataNotify = service.char(DATA_NOTIFY_UUID);
+  dataWrite.writeImpl = async () => {
+    dataNotify.notify(settingsFrame());
+  };
+}
+
 describe('QingpingClient auth', () => {
   let device: FakeDevice;
   let service: FakeService;
@@ -135,6 +157,7 @@ describe('QingpingClient auth', () => {
       if (subcmd === 0x01) authNotify.notify(ackFrame(0x01, 0x02));
       if (subcmd === 0x02) authNotify.notify(ackFrame(0x02, 0x00));
     };
+    answerSettingsProof(service);
 
     const client = createQingpingClientWithDevice(device);
     await client.requestDevice();
@@ -172,14 +195,17 @@ describe('QingpingClient auth', () => {
     await expect(client.connect(TOKEN)).rejects.toThrow(AuthRejectedError);
   });
 
-  it('times out when no ACK ever arrives', async () => {
+  it('rejects a silent device once the settings proof times out', async () => {
+    // Missing auth ACKs are tolerated, so a wholly silent device only fails
+    // when the privileged settings read gets no reply. That reads as a
+    // pairing rejection, not a bare timeout.
     vi.useFakeTimers();
     try {
       const client = createQingpingClientWithDevice(device);
       await client.requestDevice();
       const connecting = client.connect(TOKEN);
-      const assertion = expect(connecting).rejects.toThrow(CommandError);
-      await vi.advanceTimersByTimeAsync(10_001);
+      const assertion = expect(connecting).rejects.toThrow(AuthRejectedError);
+      await vi.advanceTimersByTimeAsync(20_001);
       await assertion;
     } finally {
       vi.useRealTimers();
@@ -198,6 +224,7 @@ async function authenticate(
     if (subcmd === 0x01) authNotify.notify(ackFrame(0x01, 0x02));
     if (subcmd === 0x02) authNotify.notify(ackFrame(0x02, 0x00));
   };
+  answerSettingsProof(service);
   await client.requestDevice();
   await client.connect(TOKEN);
 }

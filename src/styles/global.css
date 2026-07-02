@@ -573,16 +573,58 @@ input[type="radio"] {
   margin-top: 0;
 }
 
-.wizard-option {
+.wizard-choice {
   border: 1px solid var(--line);
   border-radius: var(--radius-control);
   padding: 14px;
   margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.wizard-option__title {
+.wizard-choice > legend {
+  padding: 0 6px;
+}
+
+.wizard-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.wizard-radio input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.wizard-radio__title {
+  display: block;
   font-weight: 600;
-  margin-bottom: 4px;
+}
+
+.wizard-code {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  margin-left: 26px;
+  background: var(--shell);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.wizard-code .mono {
+  font-size: 13px;
+  /* Wrap between 4-byte groups, never mid-group. */
+  white-space: normal;
+  word-break: keep-all;
+}
+
+.wizard-choice > input[type="text"] {
+  margin-left: 26px;
 }
 
 /* ---------- Progress bar ---------- */

@@ -150,42 +150,24 @@ export async function disconnectFlow(): Promise<void> {
   connectionState.value = 'disconnected';
 }
 
-export async function pairAsFreshClock(): Promise<void> {
-  const dev = pairingDevice.value;
-  if (!dev) return;
-  const tokenHex = tokenStore.generateAndStoreToken(dev.id, dev.name);
-  const token = fromHex(tokenHex);
-  if (!token) return;
-  pairingBusy.value = true;
-  pairingError.value = null;
-  try {
-    await finishConnect(getClient(), dev, token, tokenHex);
-    showPairingWizard.value = false;
-  } catch (err) {
-    if (err instanceof AuthRejectedError) {
-      pairingAuthRejected.value = true;
-      pairingError.value = AUTH_REJECTED_COPY;
-    } else {
-      pairingError.value = describeError(err).message;
-    }
-  } finally {
-    pairingBusy.value = false;
-  }
-}
-
-export async function pairByAdoptingToken(hex: string): Promise<void> {
+// The device was already selected in the chooser (connectFlow holds the
+// handle), so pairing just connects with the chosen code - no second chooser,
+// and connect() needs no user gesture. That keeps the whole thing inside the
+// clock's flashing-icon pairing window.
+export async function pairWithCode(hex: string): Promise<void> {
   const dev = pairingDevice.value;
   if (!dev) return;
   if (!isValidTokenHex(hex)) {
-    pairingError.value = 'Enter the 32-character hex token (16 bytes).';
+    pairingError.value = 'Enter the 32-character hex code (16 bytes).';
     return;
   }
   const token = fromHex(hex);
   if (!token) {
-    pairingError.value = 'Enter the 32-character hex token (16 bytes).';
+    pairingError.value = 'Enter the 32-character hex code (16 bytes).';
     return;
   }
   pairingBusy.value = true;
+  pairingAuthRejected.value = false;
   pairingError.value = null;
   try {
     await finishConnect(getClient(), dev, token, toHex(token));

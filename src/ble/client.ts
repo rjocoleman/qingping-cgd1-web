@@ -1,6 +1,6 @@
 /** Web Bluetooth client for the CGD1. Mirrors qingping_cgd1/client.py's state machine. */
 
-import { ACK_STATUS_CONTINUE, ACK_STATUS_SUCCESS, parseAck } from '../protocol/ack';
+import { ACK_STATUS_SUCCESS, parseAck } from '../protocol/ack';
 import {
   decodeAlarm,
   decodeSettings,
@@ -53,8 +53,10 @@ import {
 const COMMAND_TIMEOUT_MS = 10_000;
 const INIT_ACK_TIMEOUT_MS = 10_000;
 const BLOCK_ACK_TIMEOUT_MS = 5_000;
+// Short on purpose: a missing auth ACK is tolerated, so this only bounds how
+// long the handshake waits before moving on to the settings-read proof.
+const AUTH_ACK_TIMEOUT_MS = 3_000;
 const BLOCK_ACK_SUBCMD = 0x08;
-const AUTH_STEP2_SUCCESS = 0x00;
 
 interface PendingFuture<T> {
   resolve(value: T): void;
@@ -184,8 +186,17 @@ class QingpingClientImpl implements QingpingClient {
         );
 
         this.setState('authenticating');
-        await this.authStep(authWrite, concatBytes(AUTH_STEP1, token), ACK_STATUS_CONTINUE, 1);
-        await this.authStep(authWrite, concatBytes(AUTH_STEP2, token), AUTH_STEP2_SUCCESS, 2);
+        await this.authStep(authWrite, concatBytes(AUTH_STEP1, token));
+        await this.authStep(authWrite, concatBytes(AUTH_STEP2, token));
+
+        // The device ACKs even a wrong token, so prove the pairing with a
+        // privileged read; a bad token surfaces as a timeout or disconnect.
+        try {
+          await this.requestSettings();
+        } catch (err) {
+          if (err instanceof AuthRejectedError) throw err;
+          throw new AuthRejectedError('the clock did not accept this pairing code');
+        }
 
         this.setState('connected');
       } catch (err) {
@@ -432,19 +443,24 @@ class QingpingClientImpl implements QingpingClient {
     }
   }
 
-  private async authStep(
-    char: BleCharacteristic,
-    payload: Uint8Array,
-    expectedStatus: number,
-    step: 1 | 2,
-  ): Promise<void> {
+  // Auth ACK statuses are advisory. Hardware only pins down 0x01 = rejected
+  // (bound to a different token); the Python client never checks auth ACKs
+  // at all and proves auth with a privileged read instead. So: reject fast
+  // on 0x01, tolerate any other status or a missing ACK, and let the
+  // settings-read proof in connect() be the real gate. Being stricter here
+  // broke first-time binding on real firmware.
+  private async authStep(char: BleCharacteristic, payload: Uint8Array): Promise<void> {
     const subcmd = payload[1] as number;
-    const ack = this.registerAck(subcmd, COMMAND_TIMEOUT_MS);
+    const ack = this.registerAck(subcmd, AUTH_ACK_TIMEOUT_MS);
     await this.writeRaw(char, payload, 'auth-write');
-    const status = await ack;
-    if (status === expectedStatus) return;
+    let status: number;
+    try {
+      status = await ack;
+    } catch (err) {
+      if (err instanceof ConnectionLostError) throw err;
+      return;
+    }
     if (status === 0x01) throw new AuthRejectedError('the clock is bound to a different token');
-    throw new CommandError(`auth step ${step} failed with status 0x${status.toString(16)}`);
   }
 
   // -- notify-backed reads ---------------------------------------------------
