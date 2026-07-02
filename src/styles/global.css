@@ -1,0 +1,686 @@
+/* Qingping CGD1 companion app. Palette and rhythm from the design brief:
+   warm bedside dark by default, warm daytime grey on prefers-color-scheme:
+   light. The LCD panel below is the one place with real boldness. */
+
+@font-face {
+  font-family: "DSEG7 Classic";
+  src: url("/fonts/dseg/DSEG7Classic-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "DSEG7 Classic";
+  src: url("/fonts/dseg/DSEG7Classic-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --shell: #1a1813;
+  --card: #24211b;
+  --ink: #ece8df;
+  --muted: #99938a;
+  --accent: #ffb454;
+  --accent-hover: #e6a344;
+  --line: #35312a;
+  --error: #c4442a;
+
+  --panel: #14120e;
+  --panel-ghost: #3a352b;
+  --panel-lit: #ffb454;
+
+  --font-ui: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --font-seg: "DSEG7 Classic", var(--font-mono);
+
+  --radius-card: 12px;
+  --radius-control: 6px;
+  --ease-instant: 120ms ease;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --shell: #eceae6;
+    --card: #f6f5f2;
+    --ink: #26241f;
+    --muted: #6e6a61;
+    --accent: #b96e00;
+    --accent-hover: #9a5c00;
+    --line: #d8d5ce;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--shell);
+  color: var(--ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+button,
+input,
+select {
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+}
+
+a {
+  color: var(--accent);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.app-shell {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 20px 16px 64px;
+}
+
+.section-label {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.caption {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ---------- LCD panel: the signature element ---------- */
+
+.lcd-panel {
+  position: relative;
+  background: var(--panel);
+  border-radius: var(--radius-card);
+  padding: 20px 20px 16px;
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.lcd-panel__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.lcd-panel__status {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--panel-ghost);
+}
+
+.lcd-panel--connected .lcd-panel__status {
+  color: var(--panel-lit);
+}
+
+.lcd-panel__device-name {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.lcd-panel__alarm-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--panel-ghost);
+  display: inline-block;
+  margin-left: 8px;
+}
+
+.lcd-panel--armed .lcd-panel__alarm-dot {
+  background: var(--panel-lit);
+}
+
+.lcd-panel__display {
+  position: relative;
+  text-align: center;
+  line-height: 1;
+}
+
+.lcd-panel__digits-ghost,
+.lcd-panel__digits-lit {
+  font-family: var(--font-seg);
+  font-size: clamp(3rem, 10vw, 5rem);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.lcd-panel__digits-ghost {
+  color: var(--panel-ghost);
+}
+
+.lcd-panel__digits-lit {
+  position: absolute;
+  inset: 0;
+  color: var(--panel-lit);
+}
+
+.lcd-panel__colon {
+  animation: lcd-blink 1s steps(1, end) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lcd-panel__colon {
+    animation: none;
+  }
+}
+
+@keyframes lcd-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.lcd-panel__minors {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--panel-ghost);
+}
+
+.lcd-panel--connected .lcd-panel__minors {
+  color: var(--panel-lit);
+  opacity: 0.8;
+}
+
+/* ---------- Tab bar ---------- */
+
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin: 20px 0 16px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.tab-bar__button {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 10px 12px;
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--ease-instant), border-color var(--ease-instant);
+  white-space: nowrap;
+}
+
+.tab-bar__button:hover {
+  color: var(--ink);
+}
+
+.tab-bar__button[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+/* ---------- Cards & rows ---------- */
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius-card);
+  border: 1px solid var(--line);
+  padding: 4px 16px;
+  margin-bottom: 16px;
+}
+
+.card + .card {
+  margin-top: 16px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  min-height: 40px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.row__label {
+  font-weight: 500;
+}
+
+.row__control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.row--column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+/* ---------- Buttons ---------- */
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+  border-radius: var(--radius-control);
+  padding: 10px 16px;
+  min-height: 40px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity var(--ease-instant), background var(--ease-instant);
+}
+
+.btn:hover {
+  opacity: 0.85;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--panel);
+}
+
+.btn--primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+  opacity: 1;
+}
+
+.btn--danger {
+  color: var(--error);
+  border-color: var(--error);
+  background: transparent;
+}
+
+.btn--ghost {
+  background: transparent;
+}
+
+.btn--small {
+  padding: 6px 10px;
+  min-height: 32px;
+  font-size: 13px;
+}
+
+/* ---------- Form controls ---------- */
+
+input[type="text"],
+input[type="number"],
+input[type="time"],
+select {
+  background: var(--shell);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 8px 10px;
+  min-height: 40px;
+  color: var(--ink);
+}
+
+input[type="range"] {
+  accent-color: var(--accent);
+  width: 100%;
+}
+
+input[type="checkbox"],
+input[type="radio"] {
+  accent-color: var(--accent);
+  width: 20px;
+  height: 20px;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 44px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.switch input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+  margin: 0;
+}
+
+.switch__track {
+  position: absolute;
+  inset: 0;
+  background: var(--line);
+  border-radius: 999px;
+  transition: background var(--ease-instant);
+  pointer-events: none;
+}
+
+.switch__thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--card);
+  transition: transform var(--ease-instant);
+  pointer-events: none;
+}
+
+.switch input:checked + .switch__track {
+  background: var(--accent);
+}
+
+.switch input:checked ~ .switch__thumb {
+  transform: translateX(18px);
+}
+
+.switch input:focus-visible ~ .switch__track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Weekday chips ---------- */
+
+.weekday-chips {
+  display: flex;
+  gap: 6px;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
+.weekday-chips legend {
+  padding: 0;
+}
+
+.weekday-chip {
+  appearance: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--shell);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--ease-instant), color var(--ease-instant);
+}
+
+.weekday-chip[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--panel);
+}
+
+/* ---------- Alarm cards ---------- */
+
+.alarm-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 16px;
+  margin-bottom: 12px;
+}
+
+.alarm-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.alarm-card__slot {
+  color: var(--muted);
+}
+
+.alarm-card__time {
+  font-size: 28px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.alarm-card__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.empty-state {
+  color: var(--muted);
+  padding: 16px 0;
+}
+
+/* ---------- Error banner ---------- */
+
+.error-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: var(--card);
+  border: 1px solid var(--error);
+  border-left-width: 4px;
+  border-radius: var(--radius-control);
+  padding: 12px 14px;
+  margin-bottom: 16px;
+}
+
+.error-banner__message {
+  flex: 1;
+}
+
+/* ---------- Pairing wizard / modal ---------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 16px;
+  z-index: 10;
+}
+
+@media (min-width: 480px) {
+  .modal-backdrop {
+    align-items: center;
+  }
+}
+
+.modal-card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-card);
+  padding: 20px;
+  max-width: 480px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-card h2 {
+  margin-top: 0;
+}
+
+.wizard-option {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 14px;
+  margin-top: 12px;
+}
+
+.wizard-option__title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+/* ---------- Progress bar ---------- */
+
+.progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.progress__track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.progress__fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width var(--ease-instant);
+}
+
+.progress__label {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  min-width: 3.5em;
+  text-align: right;
+}
+
+/* ---------- Frame log ---------- */
+
+.frame-log {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: var(--shell);
+}
+
+.frame-log__row {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  gap: 8px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+
+.frame-log__row:nth-child(even) {
+  background: rgba(128, 128, 128, 0.06);
+}
+
+.frame-log__ts {
+  color: var(--muted);
+}
+
+.frame-log__dir--tx {
+  color: var(--accent);
+}
+
+.frame-log__dir--rx {
+  color: var(--muted);
+}
+
+.frame-log__hex {
+  overflow-x: auto;
+}
+
+.frame-log__empty {
+  padding: 16px;
+  color: var(--muted);
+}
+
+/* ---------- Layout helpers ---------- */
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.token-display {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  word-break: break-all;
+  background: var(--shell);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 10px 12px;
+}
+
+.unsupported-notice {
+  margin-top: 40px;
+  text-align: center;
+}
