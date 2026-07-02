@@ -1,11 +1,50 @@
-import { useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { cancelPairing, pairWithCode } from '../state/actions';
 import { generateTokenHex, groupHex, isValidTokenHex } from '../state/hex';
 import { pairingAuthRejected, pairingBusy, pairingDevice, pairingError } from '../state/store';
 
 type CodeSource = 'new' | 'existing';
 
+const FOCUSABLE = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+
 export function PairingWizard() {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  // Modal focus handling: move focus in on open, trap Tab within the card,
+  // close on Escape, and restore focus to whatever opened it on unmount.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const card = cardRef.current;
+    card?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        cancelPairing();
+        return;
+      }
+      if (e.key !== 'Tab' || !card) return;
+      const items = Array.from(card.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+        (el) => !el.hasAttribute('disabled'),
+      );
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      opener?.focus();
+    };
+  }, []);
+
   // Generate the new code once so it stays stable while the panel is open;
   // the user can copy it to reuse the same binding in Home Assistant later.
   const [newCode, setNewCode] = useState(generateTokenHex);
@@ -22,8 +61,14 @@ export function PairingWizard() {
 
   return (
     <div className="modal-backdrop">
-      {/* biome-ignore lint/a11y/useSemanticElements: styled modal card, not a native <dialog> */}
-      <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="pairing-title">
+      <div
+        ref={cardRef}
+        className="modal-card"
+        // biome-ignore lint/a11y/useSemanticElements: styled modal card, not a native <dialog>
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="pairing-title"
+      >
         <h2 id="pairing-title">Pair {dev?.name ?? 'this clock'}</h2>
 
         <p className="caption">
@@ -93,7 +138,11 @@ export function PairingWizard() {
           )}
         </fieldset>
 
-        {error && !rejected && <p className="caption">{error}</p>}
+        {error && !rejected && (
+          <p className="caption" role="alert">
+            {error}
+          </p>
+        )}
 
         <div className="cluster" style={{ marginTop: 16 }}>
           <button

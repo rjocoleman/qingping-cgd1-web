@@ -4,7 +4,7 @@ import { showPairingWizard } from '../state/store';
 import { ErrorBanner } from './ErrorBanner';
 import { LcdPanel } from './LcdPanel';
 import { PairingWizard } from './PairingWizard';
-import { TabBar } from './TabBar';
+import { TabBar, tabButtonId, tabPanelId } from './TabBar';
 import type { TabId } from './TabBar';
 import { UnsupportedNotice } from './UnsupportedNotice';
 import { AdvancedTab } from './tabs/AdvancedTab';
@@ -44,7 +44,9 @@ export function App() {
       <LcdPanel />
       <ErrorBanner />
       <TabBar active={tab} onSelect={setTab} />
-      <TabContent tab={tab} />
+      <div id={tabPanelId(tab)} role="tabpanel" aria-labelledby={tabButtonId(tab)}>
+        <TabContent tab={tab} />
+      </div>
       {showPairingWizard.value && <PairingWizard />}
     </div>
   );

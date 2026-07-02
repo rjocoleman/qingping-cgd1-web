@@ -78,6 +78,7 @@ export function AdvancedTab() {
             className="mono"
             value={pasteValue}
             placeholder="00112233445566778899aabbccddeeff"
+            aria-label="Existing pairing code, 32 hex characters"
             onInput={(e) => setPasteValue((e.target as HTMLInputElement).value)}
           />
           {pasteError && <p className="caption">{pasteError}</p>}

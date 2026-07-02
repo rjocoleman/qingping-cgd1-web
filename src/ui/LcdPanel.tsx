@@ -61,10 +61,11 @@ export function LcdPanel() {
         <span className="lcd-panel__status">
           {statusLabel(state)}
           {dev?.name ? <span className="lcd-panel__device-name"> · {dev.name}</span> : null}
+          {armed ? <span className="visually-hidden"> · alarm set</span> : null}
           <span className="lcd-panel__alarm-dot" aria-hidden="true" />
         </span>
       </div>
-      <div className="lcd-panel__display" aria-live="polite">
+      <div className="lcd-panel__display">
         <div className="lcd-panel__digits-ghost" aria-hidden="true">
           88:88
         </div>

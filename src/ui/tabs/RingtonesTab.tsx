@@ -28,6 +28,7 @@ export function RingtonesTab() {
     null,
   );
   const [converting, setConverting] = useState(false);
+  const [convertError, setConvertError] = useState<string | null>(null);
   const [progress, setProgress] = useState<{ sent: number; total: number } | null>(null);
   const [stopPreview, setStopPreview] = useState<{ stop(): void } | null>(null);
 
@@ -37,10 +38,14 @@ export function RingtonesTab() {
 
   async function convert(nextFile: File, offset: number) {
     setConverting(true);
+    setConvertError(null);
     try {
       const buffer = await nextFile.arrayBuffer();
       const result = await convertToDevicePcm(buffer, { startSeconds: offset });
       setConverted(result);
+    } catch (err) {
+      setConverted(null);
+      setConvertError(err instanceof Error ? err.message : "That file couldn't be converted.");
     } finally {
       setConverting(false);
     }
@@ -51,6 +56,7 @@ export function RingtonesTab() {
     const nextFile = input.files?.[0] ?? null;
     setFile(nextFile);
     setConverted(null);
+    setConvertError(null);
     setStartSeconds(0);
     if (nextFile) await convert(nextFile, 0);
   }
@@ -66,6 +72,8 @@ export function RingtonesTab() {
     setProgress({ sent: 0, total: 1 });
     try {
       await uploadCustomRingtone(converted.pcm, (sent, total) => setProgress({ sent, total }));
+    } catch {
+      // uploadCustomRingtone already surfaced the error banner; nothing to add.
     } finally {
       setProgress(null);
     }
@@ -128,6 +136,12 @@ export function RingtonesTab() {
             </div>
 
             {converting && <p className="caption">Converting…</p>}
+
+            {convertError && (
+              <p className="error-banner" role="alert">
+                <span className="error-banner__message">{convertError}</span>
+              </p>
+            )}
 
             {converted && !converting && (
               <div className="row">

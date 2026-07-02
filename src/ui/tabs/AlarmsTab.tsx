@@ -98,7 +98,7 @@ function AlarmCard({
         />
       </div>
       <div className="alarm-card__time">{timeValue(alarm)}</div>
-      <WeekdayChips days={alarm.days} onChange={() => {}} legend="Days" />
+      <WeekdayChips days={alarm.days} readOnly legend="Days" />
       <div className="alarm-card__row">
         <span className="caption">{alarm.snooze ? 'Snooze on' : 'Snooze off'}</span>
         <div className="cluster">

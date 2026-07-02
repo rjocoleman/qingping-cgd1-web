@@ -463,6 +463,9 @@ input[type="radio"] {
 
 .weekday-chip {
   appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 40px;
   height: 40px;
   border-radius: 50%;
@@ -475,10 +478,15 @@ input[type="radio"] {
   transition: background var(--ease-instant), color var(--ease-instant);
 }
 
-.weekday-chip[aria-pressed="true"] {
+.weekday-chip[aria-pressed="true"],
+.weekday-chip--on {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--panel);
+}
+
+span.weekday-chip {
+  cursor: default;
 }
 
 /* ---------- Alarm cards ---------- */

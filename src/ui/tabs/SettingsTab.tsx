@@ -41,6 +41,7 @@ export function SettingsTab() {
             max={5}
             step={1}
             value={current.volume}
+            aria-label="Volume"
             onInput={(e) => {
               const value = Number((e.target as HTMLInputElement).value);
               void previewBeep(value);
@@ -60,6 +61,7 @@ export function SettingsTab() {
             max={100}
             step={10}
             value={current.dayBrightness}
+            aria-label="Day brightness"
             onInput={(e) => {
               const value = Number((e.target as HTMLInputElement).value);
               void previewBrightness(value);
@@ -76,6 +78,7 @@ export function SettingsTab() {
             max={100}
             step={10}
             value={current.nightBrightness}
+            aria-label="Night brightness"
             onInput={(e) => {
               const value = Number((e.target as HTMLInputElement).value);
               void previewBrightness(value);
@@ -92,6 +95,7 @@ export function SettingsTab() {
             max={30}
             style={{ width: '5em' }}
             value={current.screenLightSeconds}
+            aria-label="Screen light seconds"
             onChange={(e) => {
               const value = Number((e.target as HTMLInputElement).value);
               void saveSettings({ screenLightSeconds: value });
@@ -105,6 +109,7 @@ export function SettingsTab() {
           <span className="row__label">Language</span>
           <select
             value={current.language}
+            aria-label="Language"
             onChange={(e) =>
               void saveSettings({ language: (e.target as HTMLSelectElement).value as Language })
             }
@@ -175,6 +180,7 @@ export function SettingsTab() {
               <input
                 type="time"
                 value={`${pad2(current.nightStart.hour)}:${pad2(current.nightStart.minute)}`}
+                aria-label="Night mode start time"
                 onChange={(e) => {
                   const [hour, minute] = (e.target as HTMLInputElement).value
                     .split(':')
@@ -188,6 +194,7 @@ export function SettingsTab() {
               <input
                 type="time"
                 value={`${pad2(current.nightEnd.hour)}:${pad2(current.nightEnd.minute)}`}
+                aria-label="Night mode end time"
                 onChange={(e) => {
                   const [hour, minute] = (e.target as HTMLInputElement).value
                     .split(':')

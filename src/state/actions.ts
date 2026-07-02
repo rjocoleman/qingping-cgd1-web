@@ -146,8 +146,13 @@ export async function connectFlow(opts?: { allDevices?: boolean }): Promise<void
 }
 
 export async function disconnectFlow(): Promise<void> {
-  await getClient().disconnect();
-  connectionState.value = 'disconnected';
+  try {
+    await getClient().disconnect();
+  } catch (err) {
+    errorBanner.value = describeError(err);
+  } finally {
+    connectionState.value = 'disconnected';
+  }
 }
 
 // The device was already selected in the chooser (connectFlow holds the
@@ -246,7 +251,10 @@ export function saveSettings(patch: Partial<DeviceSettings>): Promise<void> {
       setBusy('settings', false);
     }
   });
-  settingsWriteQueue = run;
+  // The inner task swallows its own errors, so run never rejects today. Guard
+  // the stored tail with .catch anyway: if a future edit lets it throw, the
+  // queue would otherwise stay rejected and wedge every later write.
+  settingsWriteQueue = run.catch(() => {});
   return run;
 }
 
