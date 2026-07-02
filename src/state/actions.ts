@@ -13,7 +13,7 @@ import {
   ConnectionLostError,
   type DeviceRef,
   type QingpingClient,
-} from './qingpingClient';
+} from '../ble/types';
 import {
   type ErrorBannerState,
   alarms,
