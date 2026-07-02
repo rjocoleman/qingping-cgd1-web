@@ -1,0 +1,12 @@
+pre-commit:
+  parallel: true
+  commands:
+    biome:
+      glob: "*.{js,ts,tsx,json,jsonc}"
+      run: npx biome check {staged_files}
+    tsc:
+      glob: "*.{ts,tsx}"
+      run: npx tsc --noEmit
+    vitest:
+      glob: "*.{ts,tsx}"
+      run: npx vitest run

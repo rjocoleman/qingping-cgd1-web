@@ -1,0 +1,18 @@
+[tools]
+node = "lts"
+lefthook = "2.1.9"
+
+[tasks.dev]
+run = "npm run dev"
+
+[tasks.build]
+run = "npm run build"
+
+[tasks.test]
+run = "npm run test"
+
+[tasks.lint]
+run = "npm run lint"
+
+[tasks.deploy]
+run = "npm run deploy"
