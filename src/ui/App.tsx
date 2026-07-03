@@ -6,14 +6,14 @@ import { ErrorBanner } from './ErrorBanner';
 import { Footer } from './Footer';
 import { LcdPanel } from './LcdPanel';
 import { PairingWizard } from './PairingWizard';
-import { TabBar, tabButtonId, tabPanelId } from './TabBar';
 import type { TabId } from './TabBar';
-import { UnsupportedNotice } from './UnsupportedNotice';
+import { TabBar, tabButtonId, tabPanelId } from './TabBar';
 import { AdvancedTab } from './tabs/AdvancedTab';
 import { AlarmsTab } from './tabs/AlarmsTab';
 import { ClockTab } from './tabs/ClockTab';
 import { RingtonesTab } from './tabs/RingtonesTab';
 import { SettingsTab } from './tabs/SettingsTab';
+import { UnsupportedNotice } from './UnsupportedNotice';
 
 function TabContent({ tab }: { tab: TabId }) {
   switch (tab) {

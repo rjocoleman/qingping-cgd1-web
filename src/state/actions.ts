@@ -15,11 +15,11 @@ import { getClient } from './client';
 import { fromHex, isValidTokenHex, toHex } from './hex';
 import { getAutoSyncTime, getStoredNightWindow, setStoredNightWindow } from './prefs';
 import {
-  type ErrorBannerState,
   alarms,
   battery,
   connectionState,
   device,
+  type ErrorBannerState,
   errorBanner,
   firmware,
   isBusy,

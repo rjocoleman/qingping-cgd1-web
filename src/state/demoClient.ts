@@ -27,7 +27,7 @@ import {
 } from '../protocol/const';
 import { chunkAudio } from '../protocol/ringtone';
 import type { Alarm, DeviceSettings, SensorData } from '../protocol/types';
-import { Weekday, emptyAlarm } from '../protocol/types';
+import { emptyAlarm, Weekday } from '../protocol/types';
 import { fromHex, toHex } from './hex';
 
 const DEMO_DEVICE: DeviceRef = { id: 'demo-device-1', name: 'Qingping CGD1' };

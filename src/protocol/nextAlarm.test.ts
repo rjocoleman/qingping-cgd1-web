@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { nextAlarm } from './nextAlarm';
 import type { Alarm } from './types';
-import { Weekday, emptyAlarm } from './types';
+import { emptyAlarm, Weekday } from './types';
 
 // +12h fixed offset (matches a +720 minute device tz). 2026-07-01 is a Wednesday.
 // Model in local time by constructing dates directly (no explicit tzinfo in

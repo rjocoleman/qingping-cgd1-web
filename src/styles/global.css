@@ -298,7 +298,9 @@ a {
   font-weight: 500;
   color: var(--muted);
   cursor: pointer;
-  transition: color var(--ease-instant), border-color var(--ease-instant);
+  transition:
+    color var(--ease-instant),
+    border-color var(--ease-instant);
   white-space: nowrap;
 }
 
@@ -368,7 +370,9 @@ a {
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
-  transition: opacity var(--ease-instant), background var(--ease-instant);
+  transition:
+    opacity var(--ease-instant),
+    background var(--ease-instant);
 }
 
 .btn:hover {
@@ -513,7 +517,9 @@ input[type="radio"] {
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background var(--ease-instant), color var(--ease-instant);
+  transition:
+    background var(--ease-instant),
+    color var(--ease-instant);
 }
 
 .weekday-chip[aria-pressed="true"],

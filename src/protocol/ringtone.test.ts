@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildAudioInit,
   CUSTOM_SLOT_A,
   CUSTOM_SLOT_B,
-  OFFICIAL_RINGTONES,
-  buildAudioInit,
   chunkAudio,
+  OFFICIAL_RINGTONES,
 } from './ringtone';
 
 describe('buildAudioInit', () => {
