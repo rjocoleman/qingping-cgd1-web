@@ -1,7 +1,9 @@
-import { useState } from 'preact/hooks';
-import { isBluetoothSupported } from '../state/prefs';
-import { showPairingWizard } from '../state/store';
+import { useEffect, useState } from 'preact/hooks';
+import { hasSeenAbout, isBluetoothSupported } from '../state/prefs';
+import { showAbout, showPairingWizard } from '../state/store';
+import { AboutModal } from './AboutModal';
 import { ErrorBanner } from './ErrorBanner';
+import { Footer } from './Footer';
 import { LcdPanel } from './LcdPanel';
 import { PairingWizard } from './PairingWizard';
 import { TabBar, tabButtonId, tabPanelId } from './TabBar';
@@ -30,11 +32,17 @@ function TabContent({ tab }: { tab: TabId }) {
 
 export function App() {
   const [tab, setTab] = useState<TabId>('clock');
+  const supported = isBluetoothSupported();
 
-  if (!isBluetoothSupported()) {
+  useEffect(() => {
+    if (supported && !hasSeenAbout()) showAbout.value = true;
+  }, [supported]);
+
+  if (!supported) {
     return (
       <div className="app-shell">
         <UnsupportedNotice />
+        <Footer />
       </div>
     );
   }
@@ -47,7 +55,9 @@ export function App() {
       <div id={tabPanelId(tab)} role="tabpanel" aria-labelledby={tabButtonId(tab)}>
         <TabContent tab={tab} />
       </div>
+      <Footer />
       {showPairingWizard.value && <PairingWizard />}
+      {showAbout.value && <AboutModal />}
     </div>
   );
 }

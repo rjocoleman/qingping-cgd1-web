@@ -42,6 +42,8 @@ export const pairingAuthRejected = signal(false);
 export const pairingBusy = signal(false);
 export const pairingError = signal<string | null>(null);
 
+export const showAbout = signal(false);
+
 export function setBusy(key: string, value: boolean): void {
   const next = { ...busy.value };
   if (value) next[key] = true;

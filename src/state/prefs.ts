@@ -45,3 +45,13 @@ export function getStoredNightWindow(): NightWindow | null {
 export function setStoredNightWindow(window: NightWindow): void {
   storage()?.setItem(NIGHT_WINDOW_KEY, JSON.stringify(window));
 }
+
+const SEEN_ABOUT_KEY = 'qingping.seenAbout.v1';
+
+export function hasSeenAbout(): boolean {
+  return storage()?.getItem(SEEN_ABOUT_KEY) === '1';
+}
+
+export function setSeenAbout(): void {
+  storage()?.setItem(SEEN_ABOUT_KEY, '1');
+}
