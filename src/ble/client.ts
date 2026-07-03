@@ -53,6 +53,12 @@ import {
 const COMMAND_TIMEOUT_MS = 10_000;
 const INIT_ACK_TIMEOUT_MS = 10_000;
 const BLOCK_ACK_TIMEOUT_MS = 5_000;
+// The clock accepts one connection at a time, so holding it open locks out
+// anything else (a Home Assistant integration, the official app). Drop the
+// link after this long without a command, matching the Python client's idle
+// disconnect, so the device is free the moment we stop using it. Passive
+// sensor notifications do not count as activity - only explicit commands do.
+const IDLE_DISCONNECT_MS = 120_000;
 // Short on purpose: a missing auth ACK is tolerated, so this only bounds how
 // long the handshake waits before moving on to the settings-read proof.
 const AUTH_ACK_TIMEOUT_MS = 3_000;
@@ -96,6 +102,7 @@ class QingpingClientImpl implements QingpingClient {
 
   private mutex: Promise<void> = Promise.resolve();
   private listenerCleanups: Array<() => void> = [];
+  private idleTimer: ReturnType<typeof setTimeout> | null = null;
 
   private ackFutures = new Map<number, PendingFuture<number>>();
   private settingsFuture: PendingFuture<Uint8Array> | null = null;
@@ -356,6 +363,7 @@ class QingpingClientImpl implements QingpingClient {
   }
 
   private teardownConnection(err: Error): void {
+    this.clearIdleTimer();
     for (const cleanup of this.listenerCleanups) cleanup();
     this.listenerCleanups = [];
     for (const fut of this.ackFutures.values()) fut.reject(err);
@@ -372,12 +380,39 @@ class QingpingClientImpl implements QingpingClient {
   }
 
   private async withLock<T>(fn: () => Promise<T>): Promise<T> {
-    const run = this.mutex.then(fn, fn);
+    // A command is activity: pause the idle countdown while it runs and
+    // restart it once done, so back-to-back commands keep one connection but
+    // a quiet client eventually releases the clock.
+    const guarded = async () => {
+      this.clearIdleTimer();
+      try {
+        return await fn();
+      } finally {
+        this.armIdleTimerIfConnected();
+      }
+    };
+    const run = this.mutex.then(guarded, guarded);
     this.mutex = run.then(
       () => undefined,
       () => undefined,
     );
     return run;
+  }
+
+  private armIdleTimerIfConnected(): void {
+    this.clearIdleTimer();
+    if (!this.server?.connected) return;
+    this.idleTimer = setTimeout(() => {
+      this.idleTimer = null;
+      void this.disconnect();
+    }, IDLE_DISCONNECT_MS);
+  }
+
+  private clearIdleTimer(): void {
+    if (this.idleTimer !== null) {
+      clearTimeout(this.idleTimer);
+      this.idleTimer = null;
+    }
   }
 
   private requireDataWrite(): BleCharacteristic {
