@@ -16,3 +16,6 @@ run = "npm run lint"
 
 [tasks.deploy]
 run = "npm run deploy"
+
+[tasks."deps:check"]
+run = "npm run deps:check"

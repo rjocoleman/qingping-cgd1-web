@@ -10,3 +10,10 @@ pre-commit:
     vitest:
       glob: "*.{ts,tsx}"
       run: npx vitest run
+
+pre-push:
+  commands:
+    # Non-blocking heads-up about dependencies a major version behind.
+    # Throttled to once a day; never fails the push.
+    deps-freshness:
+      run: node scripts/check-deps-freshness.mjs

@@ -11,6 +11,7 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "typecheck": "tsc --noEmit",
+    "deps:check": "node scripts/check-deps-freshness.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
