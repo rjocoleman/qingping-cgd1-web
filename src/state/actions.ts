@@ -52,6 +52,23 @@ function initClientListeners(): void {
   client.onFrame((dir, characteristic, bytes) => {
     pushFrameLog(dir, characteristic, toHex(bytes));
   });
+  registerLifecycleRelease();
+}
+
+// Release the clock the moment the tab is hidden or closing, so it never sits
+// locked to a backgrounded tab. The clock accepts one connection at a time,
+// and disconnect()'s GATT teardown runs synchronously, so pagehide frees it
+// before the page unloads rather than leaving a half-open link behind. The
+// idle timeout in the client is the backstop for a visible-but-untouched tab.
+function registerLifecycleRelease(): void {
+  if (typeof document === 'undefined') return;
+  const release = () => {
+    if (connectionState.value !== 'disconnected') void getClient().disconnect();
+  };
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') release();
+  });
+  window.addEventListener('pagehide', release);
 }
 
 function isChooserCancelled(err: unknown): boolean {

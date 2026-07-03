@@ -353,3 +353,42 @@ describe('QingpingClient commands after auth', () => {
     expect(settings.volume).toBe(50);
   });
 });
+
+describe('QingpingClient idle disconnect', () => {
+  it('drops the connection after the idle timeout with no commands', async () => {
+    vi.useFakeTimers();
+    try {
+      const device = new FakeDevice();
+      const service = device.gatt.service(SERVICE_UUID);
+      const client = createQingpingClientWithDevice(device);
+      const states: string[] = [];
+      client.onConnectionStateChange((s) => states.push(s));
+      await authenticate(client, service);
+      expect(device.gatt.connected).toBe(true);
+      await vi.advanceTimersByTimeAsync(120_001);
+      expect(device.gatt.connected).toBe(false);
+      expect(states).toContain('disconnected');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('restarts the idle countdown on each command', async () => {
+    vi.useFakeTimers();
+    try {
+      const device = new FakeDevice();
+      const service = device.gatt.service(SERVICE_UUID);
+      const client = createQingpingClientWithDevice(device);
+      await authenticate(client, service);
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(device.gatt.connected).toBe(true);
+      await client.readSettings(); // activity: restarts the countdown
+      await vi.advanceTimersByTimeAsync(90_000);
+      expect(device.gatt.connected).toBe(true);
+      await vi.advanceTimersByTimeAsync(31_000);
+      expect(device.gatt.connected).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
