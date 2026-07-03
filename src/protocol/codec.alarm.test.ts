@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { decodeAlarm, encodeAlarm } from './codec';
 import type { Alarm } from './types';
-import { Weekday, emptyAlarm } from './types';
+import { emptyAlarm, Weekday } from './types';
 
 function hex(s: string): Uint8Array {
   return Uint8Array.from(s.match(/.{2}/g)?.map((b) => Number.parseInt(b, 16)) ?? []);

@@ -55,7 +55,6 @@ export function Modal({
       <div
         ref={cardRef}
         className="modal-card"
-        // biome-ignore lint/a11y/useSemanticElements: styled modal card, not a native <dialog>
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

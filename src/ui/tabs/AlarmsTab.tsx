@@ -1,6 +1,6 @@
 import { useState } from 'preact/hooks';
-import { isAlarmEmpty } from '../../protocol/types';
 import type { Alarm } from '../../protocol/types';
+import { isAlarmEmpty } from '../../protocol/types';
 import { deleteAlarmSlot, firstEmptyAlarmSlot, saveAlarm } from '../../state/actions';
 import { alarms, connectionState, isBusy } from '../../state/store';
 import { Switch } from '../components/Switch';
@@ -77,15 +77,7 @@ function AlarmEditor({
   );
 }
 
-function AlarmCard({
-  slot,
-  alarm,
-  onEdit,
-}: {
-  slot: number;
-  alarm: Alarm;
-  onEdit: () => void;
-}) {
+function AlarmCard({ slot, alarm, onEdit }: { slot: number; alarm: Alarm; onEdit: () => void }) {
   const busy = isBusy(`alarm-${slot}`);
   return (
     <div className="alarm-card">

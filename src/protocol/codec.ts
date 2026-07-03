@@ -2,7 +2,7 @@
 
 import { CMD_SET_ALARM, CMD_SET_SETTINGS, CMD_TIME_SYNC } from './const';
 import type { Alarm, DeviceSettings, SensorData } from './types';
-import { Weekday, emptyAlarm, isAlarmEmpty } from './types';
+import { emptyAlarm, isAlarmEmpty, Weekday } from './types';
 
 const RECORD_LENGTH = 5;
 const EMPTY_RECORD = Uint8Array.of(0xff, 0xff, 0xff, 0xff, 0xff);

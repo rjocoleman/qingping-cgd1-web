@@ -30,7 +30,7 @@ import {
   SENSOR_NOTIFY_UUID,
   SERVICE_UUID,
 } from '../protocol/const';
-import { PACKET_PAYLOAD_LEN, buildAudioInit, chunkAudio } from '../protocol/ringtone';
+import { buildAudioInit, chunkAudio, PACKET_PAYLOAD_LEN } from '../protocol/ringtone';
 import type { Alarm, DeviceInfo, DeviceSettings, SensorData } from '../protocol/types';
 import { emptyAlarm } from '../protocol/types';
 import {

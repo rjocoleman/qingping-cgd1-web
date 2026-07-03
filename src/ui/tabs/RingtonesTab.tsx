@@ -1,5 +1,5 @@
 import { useState } from 'preact/hooks';
-import { MAX_RINGTONE_SECONDS, convertToDevicePcm, playPcmPreview } from '../../audio/convert';
+import { convertToDevicePcm, MAX_RINGTONE_SECONDS, playPcmPreview } from '../../audio/convert';
 import { CUSTOM_SLOT_A, CUSTOM_SLOT_B, OFFICIAL_RINGTONES } from '../../protocol/ringtone';
 import { activateRingtone, uploadCustomRingtone } from '../../state/actions';
 import { connectionState, isBusy, settings } from '../../state/store';

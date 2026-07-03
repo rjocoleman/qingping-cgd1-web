@@ -1,7 +1,7 @@
 /** Next-fire computation across one-shot, weekday, and roll-forward cases. */
 
 import type { Alarm } from './types';
-import { Weekday, isAlarmEmpty } from './types';
+import { isAlarmEmpty, Weekday } from './types';
 
 const DAYS_IN_WEEK = 7;
 const MS_PER_DAY = 24 * 60 * 60 * 1000;

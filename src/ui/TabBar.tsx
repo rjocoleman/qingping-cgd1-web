@@ -16,13 +16,7 @@ export function tabPanelId(tab: TabId): string {
   return `panel-${tab}`;
 }
 
-export function TabBar({
-  active,
-  onSelect,
-}: {
-  active: TabId;
-  onSelect: (tab: TabId) => void;
-}) {
+export function TabBar({ active, onSelect }: { active: TabId; onSelect: (tab: TabId) => void }) {
   function onKeyDown(e: KeyboardEvent, index: number) {
     let next = index;
     if (e.key === 'ArrowRight') next = (index + 1) % TABS.length;
