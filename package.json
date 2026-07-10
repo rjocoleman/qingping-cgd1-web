@@ -19,7 +19,7 @@
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "@preact/signals": "^2.9.2",
     "dseg": "^0.46.0",
-    "preact": "^10.29.3"
+    "preact": "^10.29.4"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.2",
